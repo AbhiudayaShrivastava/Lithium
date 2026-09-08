@@ -354,7 +354,7 @@ let serviceNodes = [
   { id: 'gateway', label: 'API Gateway', x: 0.32, y: 0.5, status: 'healthy' },
   { id: 'auth', label: 'Auth Service', x: 0.56, y: 0.3, status: 'healthy' },
   { id: 'payments', label: 'Payments', x: 0.56, y: 0.7, status: 'healthy' },
-  { id: 'db', label: 'PostgreSQL DB', x: 0.84, y: 0.5, status: 'healthy' }
+  { id: 'db', label: 'SQLite DB', x: 0.84, y: 0.5, status: 'healthy' }
 ];
 let serviceEdges = [
   { from: 'clients', to: 'gateway' },
@@ -381,6 +381,9 @@ function initCanvas() {
     const tt = document.getElementById('canvasTooltip');
     if (tt) tt.classList.add('hidden');
   });
+
+  // Click on node to open Node Inspector Drawer
+  canvas.addEventListener('click', handleCanvasClick);
 
   requestAnimationFrame(drawCanvas);
 }
@@ -498,6 +501,272 @@ function setNodesHealing() {
 
 function resetNodes() {
   serviceNodes.forEach(n => (n.status = 'healthy'));
+}
+
+// ============================================================================
+// Interactive Node Inspector Drawer (Feature)
+// ============================================================================
+function handleCanvasClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const mouseY = e.clientY - rect.top;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  let clickedNode = null;
+  serviceNodes.forEach(n => {
+    const dist = Math.hypot(mouseX - n.x * w, mouseY - n.y * h);
+    if (dist <= 26) clickedNode = n;
+  });
+
+  if (clickedNode) {
+    openNodeInspector(clickedNode.id);
+  }
+}
+
+const SERVICE_DETAILS = {
+  db: {
+    name: 'SQLite Database Store',
+    meta: 'Runtime: SQLite 3.42 (WAL Mode) • Local Process',
+    metric3Label: 'Active Locks & Tx:',
+    healthy: {
+      cpu: 24,
+      ram: '410 MB / 2.0 GB',
+      ramPercent: 20,
+      metric3: '14 / 100 [NORMAL]',
+      metric3Percent: 14,
+      logs: [
+        '[INFO] SQLite WAL checkpoint completed (0 pages pending)',
+        '[INFO] Transaction committed: order #8492 persisted',
+        '[INFO] Vacuum threshold verified: journal size 4.2 MB',
+        '[INFO] Average query latency: 1.2ms on user_credentials'
+      ]
+    },
+    failing: {
+      cpu: 92,
+      ram: '1.82 GB / 2.0 GB',
+      ramPercent: 91,
+      metric3: '100 / 100 [LOCK DEADLOCK]',
+      metric3Percent: 100,
+      logs: [
+        '[FATAL] sqlite3.OperationalError: database is locked (busy_timeout > 5000ms)',
+        '[ERROR] WAL checkpoint blocked by active reader deadlock in Auth pod',
+        '[WARN] 48 queries queued awaiting exclusive transaction release',
+        '[FATAL] Upstream checkout service received HTTP 500 on db write'
+      ]
+    }
+  },
+  auth: {
+    name: 'Auth Service (Go Pod)',
+    meta: 'Container: auth-pod-89a • Port: 8081',
+    metric3Label: 'Token Validations:',
+    healthy: {
+      cpu: 28,
+      ram: '480 MB / 2.0 GB',
+      ramPercent: 24,
+      metric3: '240 req / sec',
+      metric3Percent: 32,
+      logs: [
+        '[INFO] JWT signature verified for session tk-9102',
+        '[INFO] OAuth2 token refreshed successfully',
+        '[INFO] GC pause duration: 1.8ms (within threshold)',
+        '[INFO] Health probe /live returned 200 OK'
+      ]
+    },
+    failing: {
+      cpu: 96,
+      ram: '1.98 GB / 2.0 GB',
+      ramPercent: 99,
+      metric3: '42 req / sec [THROTTLED]',
+      metric3Percent: 95,
+      logs: [
+        '[FATAL] OOMKilled: container exceeded 2GB cgroup memory limit',
+        '[ERROR] Memory buffer leak in session cache validation routine',
+        '[WARN] Pod restart backoff triggered: 3 retries in 60s',
+        '[ERROR] Unclosed database connection pool leak detected'
+      ]
+    }
+  },
+  gateway: {
+    name: 'API Gateway (Envoy Proxy)',
+    meta: 'Host: envoy-gateway-prod • Port: 443',
+    metric3Label: 'Ingress Throughput:',
+    healthy: {
+      cpu: 22,
+      ram: '340 MB / 1.0 GB',
+      ramPercent: 34,
+      metric3: '1,420 rps',
+      metric3Percent: 28,
+      logs: [
+        '[INFO] Route matched: /api/v1/checkout -> payment-service',
+        '[INFO] TLS session resumed with client 104.28.14.2',
+        '[INFO] Upstream cluster healthy: all circuit breakers closed',
+        '[INFO] Access log: 200 OK across 99.8% of requests'
+      ]
+    },
+    failing: {
+      cpu: 88,
+      ram: '890 MB / 1.0 GB',
+      ramPercent: 89,
+      metric3: '45,200 rps [DDoS SURGE]',
+      metric3Percent: 95,
+      logs: [
+        '[FATAL] Rate limit exceeded on route /api/v1/auth/login',
+        '[WARN] IP cluster 185.220.0.0/16 triggering 429 Too Many Requests',
+        '[ERROR] Downstream connection queue near capacity (9,800 sockets)',
+        '[WARN] Upstream response latency exceeding 1,200ms'
+      ]
+    }
+  },
+  payments: {
+    name: 'Payment Service (FastAPI)',
+    meta: 'Container: pay-api-v2 • Port: 8082',
+    metric3Label: 'Transactions Rate:',
+    healthy: {
+      cpu: 19,
+      ram: '510 MB / 2.0 GB',
+      ramPercent: 25,
+      metric3: '42 tx / min',
+      metric3Percent: 22,
+      logs: [
+        '[INFO] Payment intent #pi_9042 created with Stripe gateway',
+        '[INFO] Webhook delivered: status charge.succeeded',
+        '[INFO] SQLite balance query executed in 1.4ms',
+        '[INFO] Zero failed transactions in last 15 minutes'
+      ]
+    },
+    failing: {
+      cpu: 65,
+      ram: '980 MB / 2.0 GB',
+      ramPercent: 49,
+      metric3: '3 tx / min [STALLED]',
+      metric3Percent: 85,
+      logs: [
+        '[ERROR] Timeout waiting for SQLite DB response (threshold 3000ms exceeded)',
+        '[WARN] 38 payment intents queued awaiting database lock release',
+        '[ERROR] HTTP 500 returned to checkout client: Internal Gateway Timeout',
+        '[WARN] Circuit breaker tripped: state shifted to OPEN'
+      ]
+    }
+  },
+  clients: {
+    name: 'Web & Mobile Clients',
+    meta: 'CDN: Cloudflare Edge Network',
+    metric3Label: 'Concurrent Users:',
+    healthy: {
+      cpu: 14,
+      ram: '120 MB / 1.0 GB',
+      ramPercent: 12,
+      metric3: '650 Active Users',
+      metric3Percent: 25,
+      logs: [
+        '[INFO] Edge cache hit ratio: 94.2%',
+        '[INFO] WebSocket persistent connection established',
+        '[INFO] Client page load time: 180ms P50',
+        '[INFO] Zero reported client crash telemetry'
+      ]
+    },
+    failing: {
+      cpu: 45,
+      ram: '280 MB / 1.0 GB',
+      ramPercent: 28,
+      metric3: '890 Retrying Users',
+      metric3Percent: 75,
+      logs: [
+        '[WARN] Client received 500 Internal Server Error on /api/checkout',
+        '[ERROR] Exponential backoff retry triggered on mobile app',
+        '[WARN] User drop-off rate spiked to 34% in last 2 minutes',
+        '[INFO] Client error beacon dispatched to telemetry collector'
+      ]
+    }
+  }
+};
+
+let currentInspectedNode = null;
+
+function openNodeInspector(nodeId) {
+  currentInspectedNode = nodeId;
+  const drawer = document.getElementById('nodeInspectorDrawer');
+  const node = serviceNodes.find(n => n.id === nodeId);
+  const data = SERVICE_DETAILS[nodeId] || SERVICE_DETAILS.db;
+  if (!drawer || !node) return;
+
+  const isFailing = node.status === 'root' || node.status === 'impacted';
+  const vitals = isFailing ? data.failing : data.healthy;
+
+  // Header
+  document.getElementById('drawerServiceName').textContent = data.name;
+  document.getElementById('drawerServiceMeta').textContent = data.meta;
+
+  const statusBadge = document.getElementById('drawerServiceStatus');
+  if (isFailing) {
+    statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30 uppercase';
+    statusBadge.textContent = node.status === 'root' ? 'FAILING (EPICENTER)' : 'IMPACTED CASCADE';
+  } else {
+    statusBadge.className = 'px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 uppercase';
+    statusBadge.textContent = 'HEALTHY';
+  }
+
+  // CPU
+  document.getElementById('drawerCpuVal').textContent = `${vitals.cpu}%`;
+  const cpuBar = document.getElementById('drawerCpuBar');
+  cpuBar.style.width = `${vitals.cpu}%`;
+  cpuBar.className = vitals.cpu > 80 ? 'bg-rose-500 h-full' : 'bg-sky-400 h-full';
+
+  // RAM
+  document.getElementById('drawerRamVal').textContent = vitals.ram;
+  const ramBar = document.getElementById('drawerRamBar');
+  ramBar.style.width = `${vitals.ramPercent}%`;
+  ramBar.className = vitals.ramPercent > 80 ? 'bg-rose-500 h-full' : 'bg-emerald-400 h-full';
+
+  // Metric 3
+  document.getElementById('drawerMetric3Label').textContent = data.metric3Label;
+  document.getElementById('drawerMetric3Val').textContent = vitals.metric3;
+  const m3Bar = document.getElementById('drawerMetric3Bar');
+  m3Bar.style.width = `${vitals.metric3Percent}%`;
+  m3Bar.className = vitals.metric3Percent > 80 ? 'bg-rose-500 h-full' : 'bg-sky-400 h-full';
+
+  // Logs
+  const logsList = document.getElementById('drawerLogsList');
+  logsList.innerHTML = vitals.logs.map(l => {
+    const isErr = l.includes('[ERROR]') || l.includes('[FATAL]');
+    const isWarn = l.includes('[WARN]');
+    const color = isErr ? 'text-rose-400 font-semibold' : (isWarn ? 'text-amber-300' : 'text-slate-300');
+    return `<div class="${color} py-0.5">${l}</div>`;
+  }).join('');
+
+  drawer.classList.remove('hidden');
+  if (window.lucide) lucide.createIcons();
+}
+
+function closeNodeInspector() {
+  const drawer = document.getElementById('nodeInspectorDrawer');
+  if (drawer) drawer.classList.add('hidden');
+  currentInspectedNode = null;
+}
+
+function drawerActionRestart() {
+  if (!currentInspectedNode) return;
+  const node = serviceNodes.find(n => n.id === currentInspectedNode);
+  addLog('CLOUD', 'POD_RESTART', `Initiated container pod restart for [${node.label}]`, 'log-warn');
+  
+  setTimeout(() => {
+    addLog('CLOUD', 'POD_READY', `Container [${node.label}] restarted successfully. Vitals normalized.`, 'log-success');
+    node.status = 'healthy';
+    openNodeInspector(currentInspectedNode);
+  }, 1000);
+}
+
+function drawerActionFlush() {
+  if (!currentInspectedNode) return;
+  const node = serviceNodes.find(n => n.id === currentInspectedNode);
+  addLog('CLOUD', 'BUFFER_FLUSH', `Flushed memory cache & WAL journal for [${node.label}]`, 'log-info');
+  
+  setTimeout(() => {
+    addLog('METRICS', 'FLUSH_DONE', `Buffer flushed for [${node.label}]. Locks released.`, 'log-success');
+    node.status = 'healthy';
+    openNodeInspector(currentInspectedNode);
+  }, 800);
 }
 
 // ============================================================================

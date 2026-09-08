@@ -65,3 +65,36 @@ body {
 .log-error { color: #f87171; }
 .log-fatal { color: #fda4af; font-weight: 700; }
 .log-success { color: #34d399; }
+
+/* Prominent Time Horizon Scrubber Slider */
+#twinSlider {
+  height: 10px;
+  border-radius: 9999px;
+  background: #1c1c24;
+  outline: none;
+  cursor: pointer;
+}
+#twinSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+  cursor: pointer;
+  border: 2px solid #ffffff;
+  transition: transform 0.1s ease;
+}
+#twinSlider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+#twinSlider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.7);
+  cursor: pointer;
+  border: 2px solid #ffffff;
+}

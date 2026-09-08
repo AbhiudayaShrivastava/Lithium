@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Lithium — Features & System Architecture</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 14mm 14mm 14mm 14mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1e293b;
+      background-color: #ffffff;
+      line-height: 1.45;
+      font-size: 11pt;
+    }
+    .header {
+      border-bottom: 2px solid #0284c7;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+    .brand-title {
+      font-size: 22pt;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.5px;
+    }
+    .brand-subtitle {
+      font-size: 11pt;
+      font-weight: 600;
+      color: #0284c7;
+      margin-top: 2px;
+    }
+    .meta-box {
+      text-align: right;
+      font-size: 9pt;
+      color: #64748b;
+      line-height: 1.4;
+    }
+    .meta-badge {
+      display: inline-block;
+      background-color: #e0f2fe;
+      color: #0369a1;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 8.5pt;
+      margin-bottom: 4px;
+    }
+    h2 {
+      font-size: 13pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 5px;
+      margin-top: 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    h3 {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: #0369a1;
+      margin-top: 8px;
+      margin-bottom: 3px;
+    }
+    p {
+      margin-bottom: 6px;
+      color: #334155;
+      font-size: 9.5pt;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      margin-left: 6px;
+    }
+    .badge-usp {
+      background: #fef08a;
+      color: #854d0e;
+      border: 1px solid #facc15;
+    }
+    .badge-active {
+      background: #dcfce7;
+      color: #166534;
+      border: 1px solid #86efac;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .feature-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      background-color: #f8fafc;
+      page-break-inside: avoid;
+    }
+    .feature-card p {
+      margin-bottom: 0;
+      color: #475569;
+    }
+    .feature-title {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      margin-bottom: 12px;
+      font-size: 9pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #cbd5e1;
+      padding: 6px 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f1f5f9;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .page-break {
+      page-break-before: always;
+    }
+    .footer {
+      margin-top: 20px;
+      padding-top: 8px;
+      border-top: 1px solid #e2e8f0;
+      font-size: 8pt;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+    }
+    ul {
+      margin-left: 16px;
+      margin-bottom: 8px;
+      font-size: 9pt;
+      color: #334155;
+    }
+    li {
+      margin-bottom: 3px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <div class="brand-title">⚡ LITHIUM</div>
+      <div class="brand-subtitle">Autonomous Operations Intelligence Desk</div>
+      <div style="font-size: 8.5pt; color: #64748b; margin-top: 3px;">Full-Stack SRE Self-Healing Platform & Digital Twin Simulation</div>
+    </div>
+    <div class="meta-box">
+      <div class="meta-badge">PS 5 — Resonance 1.0</div>
+      <div><strong>SCOPE, VIT Chennai</strong></div>
+      <div>Status: <strong>Phase 1 Complete</strong></div>
+      <div>Storage: <strong>SQLite 3 (WAL Mode)</strong></div>
+    </div>
+  </div>
+
+  <!-- ARCHITECTURE SUMMARY -->
+  <h2>1. System Architecture Overview</h2>
+  <p>
+    Lithium is an enterprise-grade Autonomous Operations Intelligence Platform engineered to detect, diagnose, and self-heal microservice outages in real time. It pairs a high-performance reactive client dashboard with a FastAPI orchestration engine, backed by durable SQLite 3 Write-Ahead Logging persistence and Google Gemini post-mortem intelligence.
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>Technologies</th>
+        <th>Core Responsibility</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Frontend Engine</strong></td>
+        <td>Vanilla JS, Tailwind CSS, Lucide, HTML5 Canvas</td>
+        <td>Reactive SRE dashboard, dynamic topology map, time-horizon scrubber, and live SSE stream.</td>
+      </tr>
+      <tr>
+        <td><strong>Backend API</strong></td>
+        <td>Python 3.13, FastAPI, Uvicorn, asyncio</td>
+        <td>Telemetry generation, chaos injection orchestrator, safety kill-switch, and REST API.</td>
+      </tr>
+      <tr>
+        <td><strong>Storage Engine</strong></td>
+        <td>SQLite 3 with WAL Mode (Write-Ahead Logging)</td>
+        <td>ACID persistence for active incidents, immutable audit ledgers, and post-incident reviews.</td>
+      </tr>
+      <tr>
+        <td><strong>Machine Learning & AI</strong></td>
+        <td>Scikit-learn IsolationForest, Google Gemini 2.5</td>
+        <td>Multi-dimensional telemetry anomaly scoring & automated senior SRE PIR reports.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- IMPLEMENTED FEATURES -->
+  <h2>2. Implemented Features (Current Capabilities)</h2>
+
+  <div class="grid-2">
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>1. Real-Time System Health & KPIs</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Header metrics for Overall Health (99.8%), Microservices Online (5/5), P99 Latency (32ms), and MTTR (16.2s) with live UTC clock and API connectivity status.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>2. Microservice Dependency Topology</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Interactive HTML5 Canvas directed graph (Clients ➔ Gateway ➔ Auth ➔ Payments ➔ SQLite DB) showing real-time health (Green/Red/Amber/Blue) with node hover & click drawer.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>3. Chaos Injector & Outage Presets</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Instant trigger buttons for Database Connection Deadlock, Auth Pod Memory Leak (OOM Kill), and Gateway DDoS Volumetric Surge with persistent SQLite logging.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>4. Live Server Telemetry Controller</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Interactive modal to inject custom telemetry: select failing service, scrub exact Calculated Risk Rate (1–100), adjust P99 latency, and test custom playbooks.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>5. Dual Autonomy Modes</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p><strong>Hybrid Autonomous:</strong> AI diagnoses root cause and prepares fix, requiring human approval. <strong>Full Autonomous:</strong> 2.0s countdown zero-touch self-healing.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>6. Safety Kill-Switch & Override</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Manual override safety interlock in FastAPI backend that disarms AI auto-remediation, rejecting unauthorized modifications with HTTP 403 Forbidden.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>7. Digital Twin Time Horizon Scrubber</span>
+        <span class="badge badge-usp">USP #1</span>
+      </div>
+      <p>Scrub forward into the future (0m to +30m) to inspect projected saturation cliffs up to 12 minutes in advance, with a one-click preemptive fix action.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>8. Automated PIR Reports & PDF Export</span>
+        <span class="badge badge-usp">USP #2</span>
+      </div>
+      <p>AI post-mortem generation via Google Gemini with causal flow diagram (Root Cause ➔ Failure ➔ Remediation ➔ Recovery) and direct browser PDF download.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>9. SQLite 3 WAL Persistence</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Durable database storing all incident records, post-mortems, and an immutable audit ledger with JSON export support.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>10. Machine Learning Anomaly Detection</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Scikit-learn IsolationForest algorithm fitted to baseline telemetry, calculating real-time anomaly scores and confidence percentages.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>11. Live Telemetry Streaming (SSE)</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Server-Sent Events stream (/api/v1/telemetry/stream) broadcasting live metrics every 1.5s to an interactive terminal with category filters.</p>
+    </div>
+
+    <div class="feature-card">
+      <div class="feature-title">
+        <span>12. Single-Click Launch System</span>
+        <span class="badge badge-active">Live</span>
+      </div>
+      <p>Automated start.bat and run_app.bat scripts that initialize the database, boot FastAPI on port 8000, start the web server on port 3000, and open the browser.</p>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- HEADER PAGE 2 -->
+  <div class="header">
+    <div>
+      <div class="brand-title">⚡ LITHIUM</div>
+      <div class="brand-subtitle">Project Roadmap & Expansion Opportunities</div>
+    </div>
+    <div class="meta-box">
+      <div>Document: <strong>Feature Specification & Ideas</strong></div>
+      <div>Author: <strong>Mantavya & Team</strong></div>
+    </div>
+  </div>
+
+  <!-- IDEAS & NEXT STEPS -->
+  <h2>3. Expansion Opportunities (What to Add Next)</h2>
+  <p>
+    The following proposed features represent high-value additions for future hackathon milestones, judging presentations, or productionizing the platform:
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 25%;">Proposed Feature</th>
+        <th style="width: 50%;">Description & Implementation Plan</th>
+        <th style="width: 25%;">Judges / Demo Impact</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. AI SRE Copilot Chat Drawer</strong></td>
+        <td>An interactive slide-out chat window where the operator can converse in natural language (e.g., <em>"Why did SQLite spike to 94%?"</em> or <em>"Run rollback script on Auth service"</em>), powered by Gemini AI with tool-calling capabilities.</td>
+        <td><strong>Highest Impact</strong><br>Demonstrates true conversational agentic AI for DevOps.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Multi-Region / Cloud Switcher</strong></td>
+        <td>A header dropdown allowing operators to toggle the operations desk between multiple cloud environments: <code>AWS us-east-1</code>, <code>GCP europe-west3</code>, and <code>Azure Central India</code>.</td>
+        <td><strong>High Impact</strong><br>Gives the platform an enterprise, multi-cloud scale feel.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Simulated PagerDuty / Slack Webhooks</strong></td>
+        <td>A notification toast module that triggers realistic webhook alerts into simulated Slack channels or PagerDuty on-call escalation policies when P1 incidents occur.</td>
+        <td><strong>High Impact</strong><br>Proves seamless integration with standard enterprise incident response workflows.</td>
+      </tr>
+      <tr>
+        <td><strong>4. Financial Loss & Downtime Counter</strong></td>
+        <td>A live dynamic ticker on the incident alert banner showing <em>"Estimated Downtime Cost Avoided: $1,420 / min"</em>, dynamically calculating ROI saved by the sub-second self-healing engine.</td>
+        <td><strong>High Impact</strong><br>Strong business value presentation for executive judges.</td>
+      </tr>
+      <tr>
+        <td><strong>5. Custom Remediation Playbook Editor</strong></td>
+        <td>A dedicated configuration view allowing SREs to upload or edit custom Bash/Python remediation scripts tied to specific microservice failure signatures.</td>
+        <td><strong>Medium-High Impact</strong><br>Shows flexibility for existing customer infrastructure.</td>
+      </tr>
+      <tr>
+        <td><strong>6. Audio Sound Effects & Voice Alerts</strong></td>
+        <td>Subtle audio cues: a sci-fi klaxon sound during incident injection and a positive audio chime when self-healing restores cluster health.</td>
+        <td><strong>Live Demo Factor</strong><br>Captures immediate audience attention during stage presentations.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- QUICK START FOR TEAM -->
+  <h2>4. Team Quick Start Guide</h2>
+  <ul>
+    <li><strong>Clone & Setup:</strong> All dependencies (FastAPI, Uvicorn, Scikit-learn, Google-GenAI) are already installed.</li>
+    <li><strong>One-Click Launch:</strong> Double-click <code>start.bat</code> in the project root directory.</li>
+    <li><strong>Backend API:</strong> Available at <code>http://localhost:8000</code> (Swagger documentation at <code>http://localhost:8000/docs</code>).</li>
+    <li><strong>Dashboard UI:</strong> Opens automatically at <code>http://localhost:3000</code>.</li>
+    <li><strong>Database:</strong> Local SQLite WAL database file is located at <code>backend/lithium.db</code>.</li>
+  </ul>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <span>⚡ Lithium Autonomous Operations Intelligence Platform</span>
+    <span>Confidential — For Team & Hackathon Review</span>
+  </div>
+
+</body>
+</html>

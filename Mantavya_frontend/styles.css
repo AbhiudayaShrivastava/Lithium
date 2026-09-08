@@ -1,0 +1,67 @@
+/* ========================================================================= */
+/* Lithium Clean Modern Operations Desk Styling                              */
+/* ========================================================================= */
+
+body {
+  background-color: #000000;
+  color: #e2e8f0;
+}
+
+/* Subtle Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #222226;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #333338;
+}
+
+/* Clean Nav & Mode Pills */
+.tab-btn.active {
+  background-color: #38bdf8 !important;
+  color: #0b0f19 !important;
+}
+.tab-btn {
+  color: #94a3b8;
+}
+.tab-btn:hover:not(.active) {
+  color: #ffffff;
+  background-color: #1e293b;
+}
+
+.mode-pill.active {
+  background-color: #38bdf8 !important;
+  color: #0b0f19 !important;
+}
+.mode-pill {
+  color: #94a3b8;
+}
+.mode-pill:hover:not(.active) {
+  color: #ffffff;
+}
+
+.filter-pill.active {
+  background-color: #38bdf8 !important;
+  color: #0b0f19 !important;
+}
+.filter-pill {
+  background-color: #182234;
+  color: #94a3b8;
+}
+.filter-pill:hover:not(.active) {
+  color: #ffffff;
+}
+
+/* Telemetry Log Styling */
+.log-info { color: #94a3b8; }
+.log-warn { color: #fbbf24; }
+.log-error { color: #f87171; }
+.log-fatal { color: #fda4af; font-weight: 700; }
+.log-success { color: #34d399; }

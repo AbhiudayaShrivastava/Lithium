@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lithium — Autonomous Operations Platform</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            lithium: {
+              bg: '#000000',
+              surface: '#0a0a0a',
+              card: '#111113',
+              border: '#222225',
+              accent: '#38bdf8',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+              amber: '#f59e0b'
+            }
+          },
+          fontFamily: {
+            mono: ['JetBrains Mono', 'monospace'],
+            sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- jsPDF & html2canvas for PDF Export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- Custom Clean Styling -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body class="bg-[#000000] text-slate-200 font-sans min-h-screen flex flex-col antialiased selection:bg-sky-500 selection:text-black">
+
+  <!-- ========================================================================= -->
+  <!-- 1. CLEAN HEADER & BRANDING: LITHIUM                                       -->
+  <!-- ========================================================================= -->
+  <header class="bg-[#0a0a0c] border-b border-[#222226] px-6 py-3.5 sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center space-x-3">
+        <!-- Energy Hexagon Logo (Option 2) -->
+        <div class="relative w-10 h-10 flex items-center justify-center">
+          <svg viewBox="0 0 100 100" class="w-10 h-10 drop-shadow-[0_0_8px_rgba(56,189,248,0.4)]">
+            <!-- Outer Hexagon Frame -->
+            <polygon points="50,4 92,27 92,73 50,96 8,73 8,27" fill="#0e131f" stroke="#2a384c" stroke-width="3" stroke-linejoin="round"/>
+            <!-- Inner Hexagon Accent -->
+            <polygon points="50,12 84,31 84,69 50,88 16,69 16,31" fill="none" stroke="#38bdf8" stroke-width="1.8" stroke-opacity="0.4" stroke-linejoin="round"/>
+            <!-- Central Lightning Energy Bolt -->
+            <path d="M 54 18 L 36 50 L 48 50 L 42 80 L 66 44 L 52 44 Z" fill="#38bdf8" filter="drop-shadow(0 0 4px #38bdf8)"/>
+            <!-- Circuit Pulse Traces (Left & Right) -->
+            <path d="M 16 48 L 30 48 L 36 42" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="30" cy="48" r="2.5" fill="#38bdf8"/>
+            <path d="M 16 62 L 34 62 L 40 56" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="34" cy="62" r="2" fill="#38bdf8"/>
+            <path d="M 84 48 L 70 48 L 64 54" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="70" cy="48" r="2.5" fill="#38bdf8"/>
+            <path d="M 84 62 L 66 62 L 60 68" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="66" cy="62" r="2" fill="#38bdf8"/>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <span class="font-extrabold text-xl tracking-tight text-white">Lithium</span>
+            <span class="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-[#16161a] text-slate-300 border border-[#2a2a30]">Operations Desk</span>
+          </div>
+          <div class="text-xs text-slate-400 flex items-center space-x-2 mt-0.5">
+            <span id="clusterStatusText" class="text-emerald-400 font-semibold flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span> System Healthy
+            </span>
+            <span class="text-slate-600">•</span>
+            <span id="liveClock" class="font-mono text-slate-400">03:00:00 UTC</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Simple Nav Tabs -->
+      <nav class="flex items-center bg-[#141417] p-1 rounded-xl border border-[#222226] text-xs">
+        <button id="tabDashboard" onclick="switchTab('dashboard')" class="tab-btn active px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+          <i data-lucide="layout-grid" class="w-4 h-4"></i> Dashboard
+        </button>
+        <button id="tabDigitalTwin" onclick="switchTab('digital-twin')" class="tab-btn px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+          <i data-lucide="sparkles" class="w-4 h-4 text-sky-400"></i> Digital Twin (+15m)
+        </button>
+        <button id="tabReports" onclick="switchTab('reports')" class="tab-btn px-4 py-2 rounded-lg font-bold transition flex items-center gap-2">
+          <i data-lucide="file-text" class="w-4 h-4"></i> Incident Reports (PIR)
+        </button>
+      </nav>
+
+      <!-- Autonomy Mode Switcher -->
+      <div class="flex items-center space-x-2 bg-[#141417] border border-[#222226] p-1 rounded-xl">
+        <span class="text-xs text-slate-400 font-semibold px-2.5">Mode:</span>
+        <button id="modeCopilotBtn" onclick="setAutonomyMode('COPILOT')" class="mode-pill active px-3 py-1.5 rounded-lg text-xs font-bold transition">
+          🛡️ Hybrid Autonomous
+        </button>
+        <button id="modeAutonomousBtn" onclick="setAutonomyMode('AUTONOMOUS')" class="mode-pill px-3 py-1.5 rounded-lg text-xs font-bold transition">
+          ⚡ Full Autonomous
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- 2. QUICK TEST CONTROLS (CHAOS INJECTOR FOR DEMO)                         -->
+  <!-- ========================================================================= -->
+  <section class="bg-[#111827]/60 border-b border-slate-800/80 px-6 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div class="flex items-center space-x-2 text-slate-300">
+        <span class="text-slate-400 font-semibold">Test Outage Scenarios:</span>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="triggerOutage('DB_LOCK')" class="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-300 font-semibold transition">
+          💥 Database Deadlock
+        </button>
+        <button onclick="triggerOutage('MEMORY_LEAK')" class="px-3 py-1.5 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/60 text-amber-300 font-semibold transition">
+          🔥 Auth Pod Memory Leak
+        </button>
+        <button onclick="triggerOutage('DDOS_SURGE')" class="px-3 py-1.5 rounded-lg bg-purple-950/40 hover:bg-purple-900/60 border border-purple-800/60 text-purple-300 font-semibold transition">
+          ⚡ Traffic Spike
+        </button>
+        <button onclick="resetSystemToHealthy()" class="px-3 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-800/60 text-emerald-300 font-semibold transition">
+          🔄 Reset All
+        </button>
+      </div>
+
+      <div class="font-mono text-[11px] text-slate-400 bg-[#182234] px-3 py-1 rounded-lg border border-slate-800">
+        Correlated: <span id="rawEventsCount" class="text-sky-400 font-bold">1,248</span> alerts ➔ <span id="correlatedIncidentsCount" class="text-emerald-400 font-bold">0</span> critical
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- 3. TOP METRICS CARDS (SIMPLE, CLEAN, READABLE)                           -->
+  <!-- ========================================================================= -->
+  <section class="max-w-7xl mx-auto w-full px-6 pt-5 pb-2">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      
+      <div class="bg-[#0a0a0c] border border-[#222226] rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Overall System Health</div>
+        <div id="healthScoreVal" class="text-2xl font-bold font-mono text-white mt-1">99.8%</div>
+        <div class="text-[11px] text-emerald-400 mt-1">Normal baseline operating</div>
+      </div>
+
+      <div class="bg-[#0a0a0c] border border-[#222226] rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Active Microservices</div>
+        <div id="servicesCountVal" class="text-2xl font-bold font-mono text-white mt-1">5 / 5</div>
+        <div class="text-[11px] text-emerald-400 mt-1">All services online</div>
+      </div>
+
+      <div class="bg-[#0a0a0c] border border-[#222226] rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">API Latency (P99)</div>
+        <div id="latencyVal" class="text-2xl font-bold font-mono text-white mt-1">32 ms</div>
+        <div class="text-[11px] text-slate-400 mt-1">Within safe threshold (&lt;100ms)</div>
+      </div>
+
+      <div class="bg-[#0a0a0c] border border-[#222226] rounded-xl p-4">
+        <div class="text-xs text-slate-400 font-medium">Avg Resolution Time (MTTR)</div>
+        <div class="text-2xl font-bold font-mono text-sky-400 mt-1">16.2 s</div>
+        <div class="text-[11px] text-slate-400 mt-1">Powered by Lithium AI Engine</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 1: MAIN DASHBOARD VIEW                                               -->
+  <!-- ========================================================================= -->
+  <main id="viewDashboard" class="flex-1 max-w-7xl mx-auto w-full px-6 py-4 space-y-6">
+
+    <!-- Active Incident Alert Banner (Shows when outage triggered) -->
+    <div id="incidentActiveBanner" class="hidden bg-rose-950/30 border border-rose-800/80 rounded-2xl p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center space-x-3">
+          <span id="incidentSeverityBadge" class="px-3 py-1 rounded bg-rose-500 text-black text-xs font-black font-mono">P1 CRITICAL</span>
+          <div>
+            <h3 id="incidentTitle" class="text-lg font-bold text-white">Database Connection Pool Exhaustion</h3>
+            <div class="text-xs text-rose-300 mt-0.5 flex items-center gap-2">
+              <span>Active Duration: <strong id="incidentDuration" class="font-mono text-white">00:12</strong></span>
+              <span>•</span>
+              <span id="incidentBlastRadius" class="text-amber-300 font-medium">Impact: 3 / 5 Services Affected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Exact 1-100 Risk Rate Card -->
+        <div class="flex items-center space-x-4 bg-[#111827] px-4 py-2.5 rounded-xl border border-slate-800">
+          <div>
+            <div class="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Calculated Risk Rate</div>
+            <div class="flex items-baseline space-x-1 mt-0.5">
+              <span id="riskRateNum" class="text-2xl font-black font-mono text-rose-400">94</span>
+              <span class="text-xs font-mono text-slate-400">/ 100</span>
+              <span id="riskLevelTag" class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 ml-1.5">EXTREME</span>
+            </div>
+          </div>
+          <div class="w-24 bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+            <div id="riskRateBar" class="bg-rose-500 h-full w-[94%] transition-all duration-500"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Root Cause & Action Box -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+        <div class="bg-[#111827] p-4 rounded-xl border border-slate-800 text-xs space-y-2">
+          <div class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Root Cause Analysis (Why?):</div>
+          <div class="text-slate-400">Epicenter: <strong id="rcaEpicenter" class="text-rose-400 font-mono">PostgreSQL Database</strong></div>
+          <p id="rcaDiagnosis" class="text-slate-200 leading-relaxed">Commit #8f3a in Auth Service introduced an unclosed database connection leak, causing connection pool exhaustion.</p>
+        </div>
+
+        <div class="bg-[#111827] p-4 rounded-xl border border-slate-800 text-xs flex flex-col justify-between space-y-3">
+          <div>
+            <div class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Recommended Fix (What Fix?):</div>
+            <div id="actionName" class="font-semibold text-white mt-1">Rollback commit #8f3a & flush DB connection pool</div>
+          </div>
+
+          <!-- Dynamic Action Execution Button (Based on Autonomy Mode) -->
+          <div>
+            <!-- Co-Pilot Mode: Manual Approve Button -->
+            <div id="copilotActionWrap">
+              <button onclick="executeRemediation('MANUAL')" class="w-full py-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-extrabold text-xs flex items-center justify-center space-x-2 transition">
+                <i data-lucide="play" class="w-4 h-4 fill-black"></i>
+                <span>Approve & Execute Fix</span>
+              </button>
+            </div>
+
+            <!-- Full Autonomous Mode: Countdown -->
+            <div id="autonomousActionWrap" class="hidden text-center bg-[#141417] p-2.5 rounded-lg border border-sky-500/40">
+              <div class="text-xs text-sky-400 font-bold">⚡ Full Autonomous Self-Healing</div>
+              <div class="text-[11px] text-slate-300 mt-0.5">Executing fix automatically in <strong id="autoCountdown" class="text-white font-mono">2.0s</strong>...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Post-Incident Resolved Banner (CTA to view PDF) -->
+    <div id="postIncidentResolvedCard" class="hidden bg-emerald-950/30 border border-emerald-800/80 rounded-xl p-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3 text-xs">
+        <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+        <span class="text-slate-200">Incident successfully resolved! Post-incident analysis complete.</span>
+      </div>
+      <button onclick="openPostMortemModal()" class="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs flex items-center gap-1.5 transition">
+        <i data-lucide="file-check" class="w-3.5 h-3.5"></i> View & Download PDF Report
+      </button>
+    </div>
+
+    <!-- 2 Columns: Simple Dependency Map + Multi-Source Feed -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Left: Simple Dependency Map (7 cols) -->
+      <div class="lg:col-span-7 bg-[#0a0a0c] border border-[#222226] rounded-2xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <i data-lucide="network" class="w-4 h-4 text-sky-400"></i>
+            <span>System Dependency Map</span>
+          </h2>
+          <div class="text-xs flex items-center space-x-3 text-slate-400">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Healthy</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Failing</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-400"></span> Impacted</span>
+          </div>
+        </div>
+
+        <!-- Clean Interactive Topology Canvas -->
+        <div class="h-64 bg-[#0b0f19] rounded-xl border border-slate-800/80 relative flex items-center justify-center overflow-hidden">
+          <canvas id="topologyCanvas" width="650" height="250" class="w-full h-full"></canvas>
+          
+          <div id="canvasTooltip" class="hidden absolute pointer-events-none bg-[#182234] border border-slate-700 p-2.5 rounded-lg shadow-xl text-xs">
+            <div id="tooltipTitle" class="font-bold text-white mb-0.5">Service</div>
+            <div id="tooltipBody" class="text-slate-300 text-[11px]">CPU: 24% | RAM: 410MB</div>
+          </div>
+        </div>
+        
+        <div class="text-[11px] text-slate-400 text-center">
+          Hover over any node to view real-time CPU & memory metrics
+        </div>
+      </div>
+
+      <!-- Right: Activity & Telemetry Feed (5 cols) -->
+      <div class="lg:col-span-5 bg-[#0a0a0c] border border-[#222226] rounded-2xl p-5 space-y-3">
+        <div class="flex justify-between items-center">
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <i data-lucide="list" class="w-4 h-4 text-sky-400"></i>
+            <span>Multi-Source Event Feed</span>
+          </h2>
+          <button onclick="clearLogs()" class="text-[11px] text-slate-400 hover:text-white transition">Clear</button>
+        </div>
+
+        <!-- Category Filter Pills -->
+        <div class="flex items-center space-x-1 text-xs">
+          <button onclick="filterLogs('ALL')" id="filterAll" class="filter-pill active px-2.5 py-1 rounded-md text-[11px] font-semibold">All</button>
+          <button onclick="filterLogs('LOGS')" id="filterLogs" class="filter-pill px-2.5 py-1 rounded-md text-[11px] font-semibold">Logs</button>
+          <button onclick="filterLogs('METRICS')" id="filterMetrics" class="filter-pill px-2.5 py-1 rounded-md text-[11px] font-semibold">Metrics</button>
+          <button onclick="filterLogs('CLOUD')" id="filterCloud" class="filter-pill px-2.5 py-1 rounded-md text-[11px] font-semibold">Cloud</button>
+          <button onclick="filterLogs('SECURITY')" id="filterSecurity" class="filter-pill px-2.5 py-1 rounded-md text-[11px] font-semibold">Security</button>
+        </div>
+
+        <div id="telemetryFeed" class="h-56 overflow-y-auto bg-[#0b0f19] p-3 rounded-xl border border-slate-800/80 font-mono text-xs space-y-1.5 scrollbar-thin">
+          <!-- Streaming logs render here -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Audit Ledger Table -->
+    <div class="bg-[#0a0a0c] border border-[#222226] rounded-2xl p-5 space-y-3">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+            <span>Auditable Incident History</span>
+          </h2>
+          <div class="text-xs text-slate-400">Cryptographically verifiable log of all system events and actions</div>
+        </div>
+        <button onclick="exportAuditJSON()" class="px-3 py-1.5 rounded-lg bg-[#182234] hover:bg-slate-800 text-xs font-semibold text-slate-300 border border-slate-700 transition">
+          Export JSON
+        </button>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs text-slate-300">
+          <thead class="bg-[#182234] text-[11px] uppercase font-mono text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="py-2.5 px-4">Time</th>
+              <th class="py-2.5 px-4">Incident ID</th>
+              <th class="py-2.5 px-4">Source</th>
+              <th class="py-2.5 px-4">Actor</th>
+              <th class="py-2.5 px-4">Action</th>
+              <th class="py-2.5 px-4">Status</th>
+            </tr>
+          </thead>
+          <tbody id="auditTableBody" class="divide-y divide-slate-800/60 font-mono text-[11px]">
+            <!-- Audit rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 2: DIGITAL TWIN VIEW (+15m FUTURE HORIZON) [USP #1]                   -->
+  <!-- ========================================================================= -->
+  <main id="viewDigitalTwin" class="hidden flex-1 max-w-7xl mx-auto w-full px-6 py-6 space-y-6">
+    <div class="bg-[#0a0a0c] border border-[#222226] rounded-2xl p-6 space-y-6">
+      
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i data-lucide="sparkles" class="w-5 h-5 text-sky-400"></i>
+            <span>Predictive Digital Twin</span>
+            <span class="text-xs px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/30 font-mono font-bold">+15m Horizon</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+            A shadow simulation runs ahead of production time to detect impending crashes before users ever experience downtime.
+          </p>
+        </div>
+
+        <div class="flex items-center space-x-4 bg-[#182234] px-4 py-2 rounded-xl border border-slate-800 text-xs">
+          <div>
+            <div class="text-[10px] uppercase text-slate-400">Real Time (Now)</div>
+            <div id="twinNowTime" class="font-mono font-bold text-white">03:00:00</div>
+          </div>
+          <div class="text-sky-400 font-bold">➔</div>
+          <div>
+            <div class="text-[10px] uppercase text-sky-400">Projected Twin Time</div>
+            <div id="twinForecastTime" class="font-mono font-bold text-sky-400">03:15:00 (+15m)</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Time Slider -->
+      <div class="bg-[#121215] border border-[#222226] rounded-xl p-5 space-y-3">
+        <div class="flex justify-between items-center text-xs font-semibold text-slate-300">
+          <span>Time Horizon Scrubber:</span>
+          <span id="sliderOffsetVal" class="font-mono text-sky-400 font-bold">+15 Mins Ahead</span>
+        </div>
+        
+        <input type="range" id="twinSlider" min="0" max="30" step="5" value="15" oninput="updateTwinSlider(this.value)" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-sky-400">
+        
+        <div class="flex justify-between text-[11px] font-mono text-slate-400">
+          <span>Now (0m)</span>
+          <span>+5m</span>
+          <span>+10m</span>
+          <span class="text-sky-400 font-bold">+15m (Default)</span>
+          <span>+20m</span>
+          <span>+25m</span>
+          <span>+30m</span>
+        </div>
+      </div>
+
+      <!-- Predictive Warning Box -->
+      <div id="twinPredictionBox" class="p-5 rounded-xl bg-gradient-to-br from-rose-950/20 to-[#182234] border border-rose-500/40 grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+        <div class="md:col-span-8 space-y-2 text-xs">
+          <div class="text-rose-400 font-bold flex items-center gap-1.5 uppercase tracking-wider text-[11px]">
+            <i data-lucide="alert-triangle" class="w-4 h-4"></i> Predicted Failure in Future Horizon
+          </div>
+          <h3 id="twinAlertTitle" class="text-base font-bold text-white">Database Pool Saturation Projected at +12 Minutes</h3>
+          <p id="twinAlertDesc" class="text-slate-300 leading-relaxed">
+            Traffic extrapolation indicates checkout volume will exceed database pool limit in approximately 12 minutes, triggering cascading HTTP 500 errors across 3 services.
+          </p>
+          <div class="flex space-x-6 text-[11px] text-slate-400 pt-1">
+            <span>Projected Risk: <strong id="twinRiskScore" class="text-rose-400 font-mono">92.4%</strong></span>
+            <span>Preventative Window: <strong class="text-emerald-400 font-mono">11 Mins Remaining</strong></span>
+          </div>
+        </div>
+
+        <div class="md:col-span-4 bg-[#0b0f19] p-4 rounded-xl border border-slate-800 space-y-3">
+          <div class="text-xs font-bold text-white">Preemptive Recommendation:</div>
+          <div class="text-[11px] text-slate-300 font-mono bg-[#182234] p-2 rounded">
+            Scale connection pool +40 & warm up 2 read-replicas
+          </div>
+          <button onclick="applyPreemptiveFix()" id="preemptiveFixBtn" class="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs transition flex items-center justify-center gap-1.5">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+            <span>⚡ Apply Preemptive Fix Now</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 3: POST-INCIDENT REPORT (PIR) LIST VIEW [USP #2]                      -->
+  <!-- ========================================================================= -->
+  <main id="viewReports" class="hidden flex-1 max-w-7xl mx-auto w-full px-6 py-6 space-y-6">
+    <div class="bg-[#111827] border border-slate-800 rounded-2xl p-6 space-y-6">
+      <div class="flex justify-between items-center">
+        <div>
+          <h2 class="text-lg font-bold text-white">Automated Post-Incident Reports (PIR)</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Saves hours of manual post-mortem writing by generating end-to-end incident summaries and PDFs.</p>
+        </div>
+        <button onclick="openPostMortemModal()" class="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-black font-bold text-xs transition">
+          View Latest Report
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="pirReportsList">
+        <!-- Rendered via JS -->
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: PIR FULL REPORT & PDF EXPORTER (USP #2)                            -->
+  <!-- ========================================================================= -->
+  <div id="postMortemModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+    <div class="bg-[#111827] border border-slate-700 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+      
+      <div class="flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-[#182234]">
+        <div class="flex items-center space-x-2">
+          <i data-lucide="file-text" class="w-4 h-4 text-sky-400"></i>
+          <h3 class="font-bold text-sm text-white">Post-Incident Report (PIR) Preview</h3>
+        </div>
+        <div class="flex items-center space-x-2">
+          <button onclick="downloadPIRAsPDF()" class="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-bold transition flex items-center gap-1.5">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Download PDF
+          </button>
+          <button onclick="closePostMortemModal()" class="text-slate-400 hover:text-white text-xs px-2 py-1">✕</button>
+        </div>
+      </div>
+
+      <!-- Printable Report Container -->
+      <div id="pirPrintArea" class="p-6 overflow-y-auto space-y-5 text-slate-300 bg-[#0b0f19] text-xs">
+        
+        <div class="border-b border-slate-800 pb-3 flex justify-between items-end">
+          <div>
+            <div class="text-[10px] uppercase font-mono tracking-widest text-sky-400">Lithium • Automated Post-Mortem</div>
+            <h1 id="pirTitle" class="text-xl font-bold text-white mt-1">Database Connection Pool Exhaustion</h1>
+            <div class="text-slate-400 mt-0.5 text-[11px]">Incident #INC-8492 | Severity: P1 CRITICAL</div>
+          </div>
+          <span class="px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-mono font-bold text-[11px]">RESOLVED</span>
+        </div>
+
+        <!-- Metrics -->
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
+            <div class="text-[10px] text-slate-400 uppercase">Detection Time (MTTD)</div>
+            <div class="text-lg font-bold font-mono text-sky-400 mt-0.5">3.2 s</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
+            <div class="text-[10px] text-slate-400 uppercase">Resolution Time (MTTR)</div>
+            <div class="text-lg font-bold font-mono text-emerald-400 mt-0.5">18.4 s</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
+            <div class="text-[10px] text-slate-400 uppercase">Downtime Cost Saved</div>
+            <div class="text-lg font-bold font-mono text-white mt-0.5">~$34,000</div>
+          </div>
+        </div>
+
+        <!-- Visual Flow Diagram -->
+        <div class="space-y-2">
+          <div class="font-bold text-white text-xs uppercase tracking-wider">Causal Flow Diagram</div>
+          <div class="p-4 rounded-xl bg-[#111827] border border-slate-800 flex items-center justify-between gap-2 text-center text-[11px]">
+            <div class="p-2 rounded bg-rose-950/40 border border-rose-800/60 text-rose-300">
+              <strong class="block">Root Cause</strong>
+              <span>Auth Commit #8f3a</span>
+            </div>
+            <span class="text-slate-500 font-bold">➔</span>
+            <div class="p-2 rounded bg-amber-950/40 border border-amber-800/60 text-amber-300">
+              <strong class="block">Failure</strong>
+              <span>DB Pool Starved</span>
+            </div>
+            <span class="text-slate-500 font-bold">➔</span>
+            <div class="p-2 rounded bg-emerald-950/40 border border-emerald-800/60 text-emerald-300">
+              <strong class="block">Remediation</strong>
+              <span>Revert & Pool Reset</span>
+            </div>
+            <span class="text-slate-500 font-bold">➔</span>
+            <div class="p-2 rounded bg-sky-950/40 border border-sky-800/60 text-sky-300">
+              <strong class="block">Recovery</strong>
+              <span>100% Operational</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="space-y-2">
+          <div class="font-bold text-white text-xs uppercase tracking-wider">Incident Timeline</div>
+          <div class="p-3.5 rounded-xl bg-[#111827] border border-slate-800 space-y-1.5 font-mono text-[11px]">
+            <div><span class="text-rose-400 font-bold">00:00:00</span> — Multi-source telemetry detected latency spike in database connections.</div>
+            <div><span class="text-rose-400 font-bold">00:00:03</span> — Lithium correlation engine unified 420 raw error alerts into incident #INC-8492.</div>
+            <div><span class="text-amber-400 font-bold">00:00:06</span> — Root cause isolated to unclosed connection leak in commit #8f3a.</div>
+            <div><span class="text-sky-400 font-bold">00:00:12</span> — Remediation playbook approved and executed.</div>
+            <div><span class="text-emerald-400 font-bold">00:00:18</span> — Telemetry normalized; cluster restored to healthy state.</div>
+          </div>
+        </div>
+
+        <div class="border-t border-slate-800 pt-3 flex justify-between text-[10px] text-slate-500 font-mono">
+          <span>Engine: Lithium Operations v1.0</span>
+          <span>Verified Hash: a7f932e18d94b41b9c8d7654a123e456</span>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

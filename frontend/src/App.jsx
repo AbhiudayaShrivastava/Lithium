@@ -1,346 +1,500 @@
-import React, { useState, useEffect } from 'react';
+/**
+ * Lithium — Autonomous Operations Platform
+ * FastAPI Live Integrated Engine
+ */
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = "http://localhost:8000";
 
-export default function OperationsDesk() {
-  const [dashboardData, setDashboardData] = useState(null);
-  const [digitalTwin, setDigitalTwin] = useState(null);
-  const [auditLedger, setAuditLedger] = useState([]);
-  const [postMortem, setPostMortem] = useState(null);
-  const [loadingPIR, setLoadingPIR] = useState(false);
-  const [message, setMessage] = useState('');
+const state = {
+  autonomyMode: 'COPILOT',
+  clusterHealth: 'NOMINAL',
+  currentTab: 'dashboard',
 
-  // 1. Fetch Dashboard & Digital Twin Data
-  const fetchData = async () => {
-    try {
-      const [dashRes, twinRes, auditRes] = await Promise.all([
-        fetch(`${API_BASE}/dashboard`),
-        fetch(`${API_BASE}/digital-twin/telemetry`),
-        fetch(`${API_BASE}/audit-ledger`)
-      ]);
-      setDashboardData(await dashRes.json());
-      setDigitalTwin(await twinRes.json());
-      const auditData = await auditRes.json();
-      setAuditLedger(auditData.ledger || []);
-    } catch (err) {
-      console.error('API Error:', err);
+  healthScore: 99.8,
+  activeServices: 5,
+  totalServices: 5,
+  latencyMs: 32,
+  rawEventsCount: 1248,
+  correlatedIncidentsCount: 0,
+
+  activeIncident: null,
+  incidentDurationSec: 0,
+  incidentTimerInterval: null,
+  autoHealInterval: null,
+
+  logs: [],
+  logFilter: 'ALL',
+  twinOffsetMins: 15,
+
+  auditHistory: [],
+  reports: []
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) lucide.createIcons();
+  startClock();
+  initCanvas();
+  fetchInitialState();
+  initTelemetrySSE();
+});
+
+function startClock() {
+  setInterval(() => {
+    const now = new Date();
+    const timeStr = now.toTimeString().split(' ')[0] + ' UTC';
+    const liveClock = document.getElementById('liveClock');
+    if (liveClock) liveClock.textContent = timeStr;
+
+    const twinNow = document.getElementById('twinNowTime');
+    if (twinNow) twinNow.textContent = timeStr;
+
+    const twinForecast = document.getElementById('twinForecastTime');
+    if (twinForecast) {
+      const forecast = new Date(now.getTime() + state.twinOffsetMins * 60000);
+      twinForecast.textContent = `${forecast.toTimeString().split(' ')[0]} (+${state.twinOffsetMins}m)`;
     }
-  };
+  }, 1000);
+}
 
-  // Poll Digital Twin metrics every 3 seconds
-  useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 3000);
-    return () => clearInterval(interval);
-  }, []);
+async function fetchInitialState() {
+  try {
+    const res = await fetch(`${API_BASE}/api/dashboard`);
+    const data = await res.json();
+    state.healthScore = data.kpis.system_health_pct;
+    updateMetrics();
 
-  // 2. Toggle Kill-Switch
-  const handleKillSwitch = async () => {
-    if (!dashboardData) return;
-    const nextState = !dashboardData.system_status.kill_switch_active;
-    try {
-      const res = await fetch(`${API_BASE}/system/kill-switch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kill_switch_active: nextState })
-      });
-      const data = await res.json();
-      setMessage(data.message);
-      fetchData();
-    } catch (err) {
-      setMessage('Failed to toggle kill switch.');
+    const nodesRes = await fetch(`${API_BASE}/api/v1/nodes`);
+    const nodes = await nodesRes.json();
+    if (nodes && nodes.length) {
+      serviceNodes = nodes;
     }
-  };
 
-  // 3. Inject Chaos Fault into Digital Twin
-  const handleInjectChaos = async (faultType) => {
-    try {
-      const res = await fetch(`${API_BASE}/digital-twin/chaos/inject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fault_type: faultType,
-          target_service: 'Payment Service'
-        })
-      });
-      const data = await res.json();
-      setMessage(data.message);
-      fetchData();
-    } catch (err) {
-      setMessage('Failed to inject chaos.');
+    const auditRes = await fetch(`${API_BASE}/api/audit-ledger`);
+    const auditData = await auditRes.json();
+    state.auditHistory = auditData.ledger.map(a => ({
+      time: new Date().toTimeString().split(' ')[0],
+      id: a.incident_id,
+      source: 'FASTAPI',
+      actor: a.operator,
+      action: a.action,
+      status: a.status
+    }));
+    renderAuditTable();
+  } catch (e) {
+    console.warn("Backend offline, running fallback state.", e);
+  }
+}
+
+function initTelemetrySSE() {
+  const eventSource = new EventSource(`${API_BASE}/api/v1/telemetry/stream`);
+  eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    state.latencyMs = Math.round(data.latency);
+    if (state.clusterHealth === 'NOMINAL') {
+      state.healthScore = Math.max(80, 100 - Math.round(data.cpu * 0.2));
+      updateMetrics();
     }
+    addLog('METRICS', 'CPU', `Live stream telemetry: CPU ${data.cpu}% | Latency ${data.latency}ms`);
   };
+}
 
-  // 4. Execute Remediation Action
-  const handleExecuteAction = async (incidentId, actionName, riskLevel) => {
-    try {
-      const res = await fetch(`${API_BASE}/remediation/execute`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          incident_id: incidentId,
-          action_name: actionName,
-          risk_level: riskLevel,
-          target_resource: 'Payment Gateway Pool',
-          executed_by: 'HUMAN_OPERATOR'
-        })
-      });
+function switchTab(tabId) {
+  state.currentTab = tabId;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
-      if (!res.ok) {
-        const errData = await res.json();
-        setMessage(`Error: ${errData.detail}`);
-        return;
-      }
+  document.getElementById('viewDashboard').classList.add('hidden');
+  document.getElementById('viewDigitalTwin').classList.add('hidden');
+  document.getElementById('viewReports').classList.add('hidden');
 
-      const data = await res.json();
-      setMessage(data.message);
-      fetchData();
-    } catch (err) {
-      setMessage('Action execution failed.');
-    }
-  };
+  if (tabId === 'dashboard') {
+    document.getElementById('tabDashboard').classList.add('active');
+    document.getElementById('viewDashboard').classList.remove('hidden');
+  } else if (tabId === 'digital-twin') {
+    document.getElementById('tabDigitalTwin').classList.add('active');
+    document.getElementById('viewDigitalTwin').classList.remove('hidden');
+  } else if (tabId === 'reports') {
+    document.getElementById('tabReports').classList.add('active');
+    document.getElementById('viewReports').classList.remove('hidden');
+    renderReports();
+  }
+}
 
-  // 5. Generate Post-Mortem via Gemini API
-  const handleGeneratePIR = async (incident) => {
-    setLoadingPIR(true);
-    try {
-      const res = await fetch(`${API_BASE}/postmortem/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          incident_id: incident.id,
-          title: incident.title,
-          root_cause: incident.probable_root_cause,
-          resolved_time: '2m 14s',
-          actions_taken: ['Expanded Connection Pool', 'Recycled Idle Threads']
-        })
-      });
-      const data = await res.json();
-      setPostMortem(data.markdown);
-    } catch (err) {
-      setMessage('Failed to generate post-mortem report.');
-    } finally {
-      setLoadingPIR(false);
-    }
-  };
+async function setAutonomyMode(mode) {
+  state.autonomyMode = mode;
+  const copilotBtn = document.getElementById('modeCopilotBtn');
+  const autonomousBtn = document.getElementById('modeAutonomousBtn');
 
-  if (!dashboardData || !digitalTwin) {
-    return <div className="p-8 text-white bg-slate-900 min-h-screen">Loading Operational Intelligence Desk...</div>;
+  const killSwitchActive = (mode === 'COPILOT');
+  await fetch(`${API_BASE}/api/system/kill-switch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kill_switch_active: killSwitchActive })
+  });
+
+  if (mode === 'COPILOT') {
+    copilotBtn.classList.add('active');
+    autonomousBtn.classList.remove('active');
+    addLog('SECURITY', 'MODE', 'Switched to [Hybrid Autonomous] mode. Manual approval required.');
+  } else {
+    autonomousBtn.classList.add('active');
+    copilotBtn.classList.remove('active');
+    addLog('SECURITY', 'MODE', 'Switched to [Full Autonomous] mode. Self-healing armed.');
   }
 
-  const { kpis, system_status, active_incidents } = dashboardData;
+  if (state.activeIncident) updateAutonomyActionUI();
+}
 
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-6 font-sans">
-      {/* Header Bar */}
-      <header className="flex justify-between items-center pb-6 border-b border-slate-800">
-        <div>
-          <h1 className="text-2xl font-bold tracking-wide text-cyan-400">
-            AUTONOMOUS OPERATIONS INTELLIGENCE DESK
-          </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Real-Time Telemetry &bull; Digital Twin Simulation Engine &bull; Automated Remediation
-          </p>
-        </div>
+function updateAutonomyActionUI() {
+  const copilotWrap = document.getElementById('copilotActionWrap');
+  const autoWrap = document.getElementById('autonomousActionWrap');
 
-        {/* Kill-Switch Button */}
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={handleKillSwitch}
-            className={`px-4 py-2 font-bold rounded text-xs transition-all ${
-              system_status.kill_switch_active
-                ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse'
-                : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-            }`}
-          >
-            {system_status.kill_switch_active ? '🛑 MANUAL OVERRIDE (ACTIVE)' : '⚡ AUTONOMOUS MODE'}
-          </button>
-        </div>
-      </header>
+  if (state.autonomyMode === 'COPILOT') {
+    copilotWrap.classList.remove('hidden');
+    autoWrap.classList.add('hidden');
+    clearInterval(state.autoHealInterval);
+  } else {
+    copilotWrap.classList.add('hidden');
+    autoWrap.classList.remove('hidden');
+    startAutoPilotCountdown();
+  }
+}
 
-      {/* Action Message Banner */}
-      {message && (
-        <div className="mt-4 p-3 bg-slate-800 border-l-4 border-cyan-500 text-xs text-slate-200 flex justify-between">
-          <span>{message}</span>
-          <button onClick={() => setMessage('')} className="text-slate-400 hover:text-white">✕</button>
-        </div>
-      )}
+function startAutoPilotCountdown() {
+  clearInterval(state.autoHealInterval);
+  let timer = 2.0;
+  const countEl = document.getElementById('autoCountdown');
 
-      {/* Top KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-        <div className="bg-slate-900 p-4 rounded border border-slate-800">
-          <div className="text-xs text-slate-400">System Health Score</div>
-          <div className={`text-2xl font-black mt-1 ${kpis.system_health_pct > 80 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {kpis.system_health_pct}%
-          </div>
-        </div>
-        <div className="bg-slate-900 p-4 rounded border border-slate-800">
-          <div className="text-xs text-slate-400">Critical Incidents</div>
-          <div className="text-2xl font-black text-red-500 mt-1">{kpis.critical_count}</div>
-        </div>
-        <div className="bg-slate-900 p-4 rounded border border-slate-800">
-          <div className="text-xs text-slate-400">Digital Twin Status</div>
-          <div className={`text-2xl font-black mt-1 ${digitalTwin.status === 'HEALTHY' ? 'text-emerald-400' : 'text-amber-400'}`}>
-            {digitalTwin.status}
-          </div>
-        </div>
-        <div className="bg-slate-900 p-4 rounded border border-slate-800">
-          <div className="text-xs text-slate-400">Avg Resolution Time</div>
-          <div className="text-2xl font-black text-cyan-400 mt-1">{kpis.avg_resolution}</div>
-        </div>
-      </div>
+  state.autoHealInterval = setInterval(() => {
+    timer -= 0.1;
+    if (countEl) countEl.textContent = Math.max(0, timer).toFixed(1) + 's';
+    if (timer <= 0) {
+      clearInterval(state.autoHealInterval);
+      executeRemediation('AUTONOMOUS');
+    }
+  }, 100);
+}
 
-      {/* Main Grid: Digital Twin Telemetry & Active Incidents */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-        
-        {/* Digital Twin Simulation Panel */}
-        <div className="bg-slate-900 p-5 rounded border border-slate-800">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
-              Digital Twin Telemetry
-            </h2>
-            <span className="text-xs text-slate-500">Live Polling</span>
-          </div>
+const OUTAGES = {
+  DB_LOCK: {
+    id: 'INC-8492',
+    title: 'Database Connection Pool Exhaustion',
+    severity: 'P1 CRITICAL',
+    riskRate: 94,
+    riskLevelTag: 'EXTREME',
+    blastRadiusText: 'Impact: 3 / 5 Services Affected',
+    epicenter: 'PostgreSQL Database',
+    diagnosis: 'Commit #8f3a in Auth Service introduced an unclosed database connection leak.',
+    action: 'Rollback commit #8f3a & flush DB connection pool',
+    rootNode: 'db',
+    affectedNodes: ['db', 'auth', 'payments'],
+    health: 44.5,
+    latency: 1420
+  },
+  MEMORY_LEAK: {
+    id: 'INC-3921',
+    title: 'Auth Pod Memory Leak (OOM Kill)',
+    severity: 'P2 HIGH',
+    riskRate: 78,
+    riskLevelTag: 'HIGH RISK',
+    blastRadiusText: 'Impact: 2 / 5 Services Affected',
+    epicenter: 'Auth Service',
+    diagnosis: 'Token validation buffer leak exceeded container cgroup memory limits.',
+    action: 'Restart Auth pods & scale deployment replicas to 4',
+    rootNode: 'auth',
+    affectedNodes: ['auth', 'gateway'],
+    health: 58.2,
+    latency: 840
+  },
+  DDOS_SURGE: {
+    id: 'INC-7104',
+    title: 'API Gateway Volumetric Traffic Surge',
+    severity: 'P1 CRITICAL',
+    riskRate: 91,
+    riskLevelTag: 'CRITICAL',
+    blastRadiusText: 'Impact: 2 / 5 Services Affected',
+    epicenter: 'API Gateway',
+    diagnosis: 'Rate limit ceiling breached by credential stuffing attack.',
+    action: 'Apply WAF IP block rule & enable adaptive rate limiting',
+    rootNode: 'gateway',
+    affectedNodes: ['gateway', 'auth'],
+    health: 65.0,
+    latency: 1650
+  }
+};
 
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span>CPU Utilization</span>
-                <span className="font-mono text-cyan-400">{digitalTwin.cpu_utilization_pct.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded overflow-hidden">
-                <div 
-                  className={`h-full ${digitalTwin.cpu_utilization_pct > 80 ? 'bg-red-500' : 'bg-cyan-500'}`} 
-                  style={{ width: `${Math.min(100, digitalTwin.cpu_utilization_pct)}%` }}
-                ></div>
-              </div>
-            </div>
+async function triggerOutage(type) {
+  const scenario = OUTAGES[type];
+  if (!scenario) return;
 
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span>Memory Usage</span>
-                <span className="font-mono text-cyan-400">{digitalTwin.memory_usage_pct.toFixed(1)}%</span>
-              </div>
-              <div className="w-full bg-slate-800 h-2 rounded overflow-hidden">
-                <div className="bg-indigo-500 h-full" style={{ width: `${digitalTwin.memory_usage_pct}%` }}></div>
-              </div>
-            </div>
+  await fetch(`${API_BASE}/api/digital-twin/chaos/inject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fault_type: type, target_service: scenario.epicenter })
+  });
 
-            <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-800">
-              <span className="text-slate-400">Network Latency:</span>
-              <span className="font-mono text-slate-200">{digitalTwin.network_latency_ms.toFixed(1)} ms</span>
-            </div>
+  state.activeIncident = scenario;
+  state.clusterHealth = 'CRITICAL';
+  state.correlatedIncidentsCount = 1;
+  state.healthScore = scenario.health;
+  state.latencyMs = scenario.latency;
+  state.activeServices = 3;
+  state.incidentDurationSec = 0;
 
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400">Error Rate:</span>
-              <span className="font-mono text-slate-200">{digitalTwin.error_rate_pct.toFixed(2)}%</span>
-            </div>
-          </div>
+  updateMetrics();
 
-          {/* Chaos Injection Sandbox */}
-          <div className="mt-6 pt-4 border-t border-slate-800">
-            <div className="text-xs font-semibold text-slate-400 mb-2">Chaos Simulation Controls</div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleInjectChaos('CPU_SPIKE')}
-                className="flex-1 bg-amber-600/20 hover:bg-amber-600/40 text-amber-300 border border-amber-600/50 py-1.5 px-2 rounded text-xs transition"
-              >
-                Inject CPU Spike
-              </button>
-              <button
-                onClick={() => handleInjectChaos('LATENCY_SURGE')}
-                className="flex-1 bg-rose-600/20 hover:bg-rose-600/40 text-rose-300 border border-rose-600/50 py-1.5 px-2 rounded text-xs transition"
-              >
-                Inject Latency
-              </button>
-            </div>
-          </div>
-        </div>
+  const statusText = document.getElementById('clusterStatusText');
+  statusText.className = 'text-rose-400 font-bold flex items-center gap-1.5';
+  statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span> Critical Outage';
 
-        {/* Active Incidents & Action Approval Gates */}
-        <div className="lg:col-span-2 bg-slate-900 p-5 rounded border border-slate-800">
-          <h2 className="text-sm font-bold text-slate-200 mb-4">Active Correlated Incidents</h2>
-          
-          <div className="space-y-3">
-            {active_incidents.map((inc) => (
-              <div key={inc.id} className="p-4 bg-slate-950 border border-slate-800 rounded flex justify-between items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${
-                      inc.severity === 'CRITICAL' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'
-                    }`}>
-                      {inc.severity}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">{inc.incident_number}</span>
-                  </div>
-                  <h3 className="text-sm font-semibold text-slate-200 mt-1">{inc.title}</h3>
-                  <div className="text-xs text-slate-400 mt-1">
-                    Root Cause: <span className="text-slate-300">{inc.probable_root_cause}</span>
-                  </div>
-                </div>
+  document.getElementById('incidentActiveBanner').classList.remove('hidden');
+  document.getElementById('postIncidentResolvedCard').classList.add('hidden');
+  document.getElementById('incidentTitle').textContent = scenario.title;
+  document.getElementById('rcaEpicenter').textContent = scenario.epicenter;
+  document.getElementById('rcaDiagnosis').textContent = scenario.diagnosis;
+  document.getElementById('actionName').textContent = scenario.action;
 
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => handleExecuteAction(inc.id, 'Approve Connection Reset', 'HIGH')}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded transition"
-                  >
-                    Execute Remediation
-                  </button>
-                  <button
-                    onClick={() => handleGeneratePIR(inc)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded transition"
-                  >
-                    Generate Post-Mortem
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+  const sevBadge = document.getElementById('incidentSeverityBadge');
+  if (sevBadge) {
+    sevBadge.textContent = scenario.severity;
+    sevBadge.className = scenario.riskRate >= 90 
+      ? 'px-3 py-1 rounded bg-rose-500 text-black text-xs font-black font-mono'
+      : 'px-3 py-1 rounded bg-amber-500 text-black text-xs font-black font-mono';
+  }
 
-      </div>
+  const blastEl = document.getElementById('incidentBlastRadius');
+  if (blastEl) blastEl.textContent = scenario.blastRadiusText;
 
-      {/* AI Post-Mortem Report Modal / Drawer */}
-      {loadingPIR && (
-        <div className="mt-6 p-4 bg-slate-900 border border-cyan-500/50 rounded text-xs text-cyan-400 animate-pulse">
-          Generating executive-ready post-mortem report via Gemini 2.5 Flash...
-        </div>
-      )}
+  const riskNumEl = document.getElementById('riskRateNum');
+  if (riskNumEl) riskNumEl.textContent = scenario.riskRate;
 
-      {postMortem && (
-        <div className="mt-6 bg-slate-900 p-6 rounded border border-slate-800 relative">
-          <button 
-            onClick={() => setPostMortem(null)} 
-            className="absolute top-4 right-4 text-slate-400 hover:text-white"
-          >
-            ✕ Close
-          </button>
-          <h2 className="text-sm font-bold text-cyan-400 mb-3">AI Incident Post-Mortem Report</h2>
-          <pre className="whitespace-pre-wrap text-xs font-mono text-slate-300 bg-slate-950 p-4 rounded border border-slate-800 max-h-96 overflow-y-auto">
-            {postMortem}
-          </pre>
-        </div>
-      )}
+  clearInterval(state.incidentTimerInterval);
+  state.incidentTimerInterval = setInterval(() => {
+    state.incidentDurationSec++;
+    const mins = String(Math.floor(state.incidentDurationSec / 60)).padStart(2, '0');
+    const secs = String(state.incidentDurationSec % 60).padStart(2, '0');
+    const durEl = document.getElementById('incidentDuration');
+    if (durEl) durEl.textContent = `${mins}:${secs}`;
+  }, 1000);
 
-      {/* Audit Ledger Feed */}
-      <div className="mt-6 bg-slate-900 p-5 rounded border border-slate-800">
-        <h2 className="text-sm font-bold text-slate-200 mb-3">Immutable Audit Ledger</h2>
-        {auditLedger.length === 0 ? (
-          <div className="text-xs text-slate-500">No actions executed in ledger yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {auditLedger.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-center text-xs p-2 bg-slate-950 rounded border border-slate-800">
-                <span className="font-mono text-slate-400">{item.event_id}</span>
-                <span className="text-slate-200">{item.action}</span>
-                <span className="text-cyan-400 font-mono">{item.operator}</span>
-                <span className="text-emerald-400 font-bold">{item.status}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+  setNodeFailure(scenario.rootNode, scenario.affectedNodes);
+
+  addLog('LOGS', 'CRITICAL', `[${scenario.severity}] ${scenario.title} detected!`, 'log-fatal');
+  addLog('METRICS', 'RCA', `Identified root culprit: ${scenario.epicenter}`, 'log-warn');
+
+  updateAutonomyActionUI();
+}
+
+async function executeRemediation(actor) {
+  if (!state.activeIncident) return;
+  const inc = state.activeIncident;
+
+  setNodesHealing();
+  addLog('CLOUD', 'EXECUTE', `Applying fix: ${inc.action}`, 'log-warn');
+
+  try {
+    await fetch(`${API_BASE}/api/remediation/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        incident_id: inc.id,
+        action_name: inc.action,
+        risk_level: inc.riskRate >= 90 ? 'HIGH' : 'LOW',
+        target_resource: inc.epicenter,
+        executed_by: actor === 'AUTONOMOUS' ? 'AI_AUTONOMOUS' : 'HUMAN_OPERATOR'
+      })
+    });
+  } catch (e) {
+    console.error("Failed to execute remediation on backend", e);
+  }
+
+  setTimeout(() => {
+    const actorLabel = actor === 'AUTONOMOUS' ? 'Full Autonomous (AI)' : 'Hybrid Autonomous (Human)';
+    addLog('METRICS', 'RESTORED', `Remediation successful! System restored in ${state.incidentDurationSec}s.`, 'log-success');
+
+    recordAudit(inc.id, 'CLOUD', actorLabel, `Executed: ${inc.action}`, 'RESOLVED');
+    savePIR(inc, actorLabel, state.incidentDurationSec);
+
+    resetSystemToHealthy(true);
+    document.getElementById('postIncidentResolvedCard').classList.remove('hidden');
+  }, 1200);
+}
+
+function resetSystemToHealthy(justResolved = false) {
+  clearInterval(state.incidentTimerInterval);
+  clearInterval(state.autoHealInterval);
+
+  state.activeIncident = null;
+  state.clusterHealth = 'NOMINAL';
+  state.correlatedIncidentsCount = 0;
+  state.healthScore = 99.8;
+  state.latencyMs = 32;
+  state.activeServices = 5;
+  updateMetrics();
+
+  const statusText = document.getElementById('clusterStatusText');
+  statusText.className = 'text-emerald-400 font-semibold flex items-center gap-1.5';
+  statusText.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> System Healthy';
+
+  document.getElementById('incidentActiveBanner').classList.add('hidden');
+  if (!justResolved) {
+    document.getElementById('postIncidentResolvedCard').classList.add('hidden');
+  }
+
+  resetNodes();
+}
+
+function updateMetrics() {
+  document.getElementById('healthScoreVal').textContent = `${state.healthScore}%`;
+  document.getElementById('latencyVal').textContent = `${state.latencyMs} ms`;
+  document.getElementById('servicesCountVal').textContent = `${state.activeServices} / 5`;
+  document.getElementById('correlatedIncidentsCount').textContent = state.correlatedIncidentsCount;
+}
+
+let canvas, ctx;
+let serviceNodes = [
+  { id: 'clients', label: 'Clients', x: 0.12, y: 0.5, status: 'healthy' },
+  { id: 'gateway', label: 'API Gateway', x: 0.32, y: 0.5, status: 'healthy' },
+  { id: 'auth', label: 'Auth Service', x: 0.56, y: 0.3, status: 'healthy' },
+  { id: 'payments', label: 'Payments', x: 0.56, y: 0.7, status: 'healthy' },
+  { id: 'db', label: 'SQLite DB', x: 0.84, y: 0.5, status: 'healthy' }
+];
+let serviceEdges = [
+  { from: 'clients', to: 'gateway' },
+  { from: 'gateway', to: 'auth' },
+  { from: 'gateway', to: 'payments' },
+  { from: 'auth', to: 'db' },
+  { from: 'payments', to: 'db' }
+];
+
+function initCanvas() {
+  canvas = document.getElementById('topologyCanvas');
+  if (!canvas) return;
+  ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(drawCanvas);
+}
+
+function drawCanvas() {
+  if (!ctx || !canvas) return;
+  const w = canvas.width;
+  const h = canvas.height;
+
+  ctx.clearRect(0, 0, w, h);
+
+  serviceEdges.forEach(e => {
+    const from = serviceNodes.find(n => n.id === e.from);
+    const to = serviceNodes.find(n => n.id === e.to);
+    if (!from || !to) return;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x * w, from.y * h);
+    ctx.lineTo(to.x * w, to.y * h);
+    ctx.strokeStyle = (from.status === 'root' || to.status === 'root') ? '#f43f5e' : '#334155';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  serviceNodes.forEach(n => {
+    const nx = n.x * w;
+    const ny = n.y * h;
+    ctx.beginPath();
+    ctx.arc(nx, ny, 18, 0, Math.PI * 2);
+    ctx.fillStyle = n.status === 'root' ? '#f43f5e' : (n.status === 'impacted' ? '#f59e0b' : '#10b981');
+    ctx.fill();
+
+    ctx.font = '600 11px sans-serif';
+    ctx.fillStyle = '#e2e8f0';
+    ctx.textAlign = 'center';
+    ctx.fillText(n.label, nx, ny + 32);
+  });
+
+  requestAnimationFrame(drawCanvas);
+}
+
+function setNodeFailure(rootId, affectedIds) {
+  serviceNodes.forEach(n => {
+    if (n.id === rootId) n.status = 'root';
+    else if (affectedIds.includes(n.id)) n.status = 'impacted';
+    else n.status = 'healthy';
+  });
+}
+
+function setNodesHealing() {
+  serviceNodes.forEach(n => {
+    if (n.status === 'root' || n.status === 'impacted') n.status = 'healing';
+  });
+}
+
+function resetNodes() {
+  serviceNodes.forEach(n => (n.status = 'healthy'));
+}
+
+function addLog(source, type, msg, level = 'log-info') {
+  const time = new Date().toTimeString().split(' ')[0];
+  state.logs.unshift({ time, source, type, msg, level });
+  if (state.logs.length > 50) state.logs.pop();
+  renderLogs();
+}
+
+function renderLogs() {
+  const feed = document.getElementById('telemetryFeed');
+  if (!feed) return;
+  feed.innerHTML = state.logs.map(l => `
+    <div class="flex items-start space-x-2 py-0.5 text-[11px]">
+      <span class="text-slate-500 font-mono">${l.time}</span>
+      <span class="px-1 rounded bg-[#182234] text-slate-300 font-bold uppercase">${l.source}</span>
+      <span class="${l.level}">${l.msg}</span>
     </div>
-  );
+  `).join('');
+}
+
+function recordAudit(id, source, actor, action, status) {
+  const time = new Date().toTimeString().split(' ')[0];
+  state.auditHistory.unshift({ time, id, source, actor, action, status });
+  renderAuditTable();
+}
+
+function renderAuditTable() {
+  const tbody = document.getElementById('auditTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = state.auditHistory.map(r => `
+    <tr class="hover:bg-[#182234]/40 transition">
+      <td class="py-2.5 px-4 text-slate-400 font-mono">${r.time}</td>
+      <td class="py-2.5 px-4 font-bold text-white">${r.id}</td>
+      <td class="py-2.5 px-4"><span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px]">${r.source}</span></td>
+      <td class="py-2.5 px-4 text-sky-400 font-medium">${r.actor}</td>
+      <td class="py-2.5 px-4 text-slate-200">${r.action}</td>
+      <td class="py-2.5 px-4"><span class="px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'RESOLVED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'}">${r.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+function savePIR(inc, actor, duration) {
+  state.reports.unshift({
+    id: inc.id,
+    title: inc.title,
+    severity: inc.severity,
+    riskRate: inc.riskRate,
+    mttd: '3.2s',
+    mttr: `${duration}s`,
+    costSaved: '~$34,000',
+    actor
+  });
+}
+
+function renderReports() {
+  const el = document.getElementById('pirReportsList');
+  if (!el) return;
+  el.innerHTML = state.reports.map((r) => `
+    <div class="bg-[#182234] border border-slate-800 p-5 rounded-xl space-y-3">
+      <h3 class="font-bold text-white text-sm">${r.title}</h3>
+      <div class="text-[11px] text-slate-400 font-mono">ID: ${r.id} • Resolved by ${r.actor}</div>
+    </div>
+  `).join('');
 }

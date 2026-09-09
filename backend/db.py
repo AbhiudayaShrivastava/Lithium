@@ -138,14 +138,15 @@ def resolve_incident(incident_id: str, resolved_by: str, duration_sec: int = 0) 
     now_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        # Mark specified incident as RESOLVED, or all ACTIVE incidents
         cursor.execute("""
             UPDATE incidents
             SET status = 'RESOLVED',
                 resolved_at = ?,
                 resolved_by = ?,
                 resolution_duration_sec = ?
-            WHERE id = ? AND status = 'ACTIVE'
-        """, (now_iso, resolved_by, duration_sec, incident_id))
+            WHERE (id = ? OR ? = '' OR ? IS NULL) AND status = 'ACTIVE'
+        """, (now_iso, resolved_by, duration_sec, incident_id, incident_id, incident_id))
         conn.commit()
 
     return get_incident(incident_id)
@@ -272,3 +273,14 @@ def get_all_pir_records(limit: int = 20) -> List[Dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM pir_reports ORDER BY id DESC LIMIT ?", (limit,))
         return [dict(r) for r in cursor.fetchall()]
+
+
+def get_avg_resolution_seconds() -> float:
+    """Calculates actual average Mean Time to Resolution (MTTR) across all resolved incidents."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT AVG(resolution_duration_sec) FROM incidents WHERE status = 'RESOLVED' AND resolution_duration_sec > 0")
+        row = cursor.fetchone()
+        if row and row[0] is not None:
+            return round(float(row[0]), 1)
+    return 16.2

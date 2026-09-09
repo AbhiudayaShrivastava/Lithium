@@ -28,10 +28,15 @@ async function apiFetch(endpoint, options = {}) {
   }
 }
 
-function setBackendConnected(connected) {
+function setBackendConnected(connected, data = null) {
   isBackendConnected = connected;
   const dot = document.getElementById('backendStatusDot');
   const text = document.getElementById('backendStatusText');
+  const dbText = document.getElementById('dbEngineText');
+
+  const fleetDot = document.getElementById('fleetStatusDot');
+  const fleetText = document.getElementById('fleetStatusText');
+
   if (dot && text) {
     if (connected) {
       dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
@@ -43,20 +48,37 @@ function setBackendConnected(connected) {
       text.textContent = 'API: Connecting...';
     }
   }
+
+  if (data && data.database_engine && dbText) {
+    dbText.textContent = `DB: ${data.database_engine.split(' ')[0]}`;
+    dbText.title = data.database_engine;
+  }
+
+  if (data && fleetDot && fleetText) {
+    if (data.fleet_live) {
+      fleetDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400';
+      fleetText.className = 'text-emerald-300 font-bold';
+      fleetText.textContent = 'Fleet: 3 Live Servers (5001-5003)';
+    } else {
+      fleetDot.className = 'w-1.5 h-1.5 rounded-full bg-sky-400';
+      fleetText.className = 'text-sky-300';
+      fleetText.textContent = 'Fleet: Standby / Ready';
+    }
+  }
 }
 
 function initBackendConnection() {
   // 1. Initial health ping & autonomy mode check
   apiFetch('/api/health').then(data => {
     if (data) {
-      setBackendConnected(true);
+      setBackendConnected(true, data);
       if (data.autonomy_mode) {
         setAutonomyMode(data.autonomy_mode, false);
       }
     }
   });
 
-  // 2. Fetch persistent audit ledger from SQLite
+  // 2. Fetch persistent audit ledger
   renderAuditTable();
 
   // 3. Connect to SSE Real-Time Telemetry Stream
@@ -66,11 +88,11 @@ function initBackendConnection() {
     sseSource.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        setBackendConnected(true);
-        if (payload.cpu !== undefined) {
+        setBackendConnected(true, payload);
+        if (payload.latency !== undefined) {
           if (!state.activeIncident) {
             state.latencyMs = Math.round(payload.latency);
-            state.healthScore = Math.max(90, Math.round((100 - payload.cpu * 0.05) * 10) / 10);
+            state.healthScore = payload.health_score !== undefined ? payload.health_score : Math.max(90, Math.round((100 - payload.cpu * 0.05) * 10) / 10);
             updateMetrics();
           }
         }
@@ -88,8 +110,15 @@ function initBackendConnection() {
     const data = await apiFetch('/api/dashboard');
     if (data && data.system_status) {
       setBackendConnected(true);
+      if (data.kpis) {
+        if (!state.activeIncident) {
+          state.healthScore = data.kpis.system_health_pct;
+        }
+        state.avgMttr = data.kpis.avg_resolution;
+        updateMetrics();
+      }
     }
-  }, 5000);
+  }, 3000);
 }
 
 // Global State
@@ -296,16 +325,16 @@ const OUTAGES = {
   },
   DDOS_SURGE: {
     id: 'INC-7104',
-    title: 'API Gateway Volumetric Traffic Surge',
+    title: 'Order Checkout Traffic Spike',
     severity: 'P1 CRITICAL',
     riskRate: 91,
     riskLevelTag: 'CRITICAL',
     blastRadiusText: 'Impact: 2 / 5 Services Affected',
-    epicenter: 'API Gateway',
-    diagnosis: 'Rate limit ceiling breached by 45,000 req/sec credential stuffing attack originating from suspicious IP cluster.',
-    action: 'Apply WAF IP block rule & enable adaptive rate limiting',
-    rootNode: 'gateway',
-    affectedNodes: ['gateway', 'auth'],
+    epicenter: 'Order Service (Port 5003)',
+    diagnosis: 'Volumetric 45,000 req/sec flash-sale checkout surge throttled worker pool to 96% CPU, inducing downstream rate-limiting on Payment Gateway.',
+    action: 'Enable adaptive queue rate-limiting & autoscale Order worker pods',
+    rootNode: 'order',
+    affectedNodes: ['order', 'payments'],
     health: 65.0,
     latency: 1650
   }
@@ -507,10 +536,17 @@ function resetSystemToHealthy(justResolved = false) {
 }
 
 function updateMetrics() {
-  document.getElementById('healthScoreVal').textContent = `${state.healthScore}%`;
-  document.getElementById('latencyVal').textContent = `${state.latencyMs} ms`;
-  document.getElementById('servicesCountVal').textContent = `${state.activeServices} / 5`;
-  document.getElementById('correlatedIncidentsCount').textContent = state.correlatedIncidentsCount;
+  const hEl = document.getElementById('healthScoreVal');
+  const lEl = document.getElementById('latencyVal');
+  const sEl = document.getElementById('servicesCountVal');
+  const cEl = document.getElementById('correlatedIncidentsCount');
+  const mEl = document.getElementById('avgMttrVal');
+
+  if (hEl) hEl.textContent = `${state.healthScore}%`;
+  if (lEl) lEl.textContent = `${state.latencyMs} ms`;
+  if (sEl) sEl.textContent = `${state.activeServices} / 5`;
+  if (cEl) cEl.textContent = state.correlatedIncidentsCount;
+  if (mEl && state.avgMttr) mEl.textContent = state.avgMttr;
 }
 
 // ============================================================================
@@ -518,16 +554,19 @@ function updateMetrics() {
 // ============================================================================
 let canvas, ctx;
 let serviceNodes = [
-  { id: 'clients', label: 'Clients', x: 0.12, y: 0.5, status: 'healthy' },
-  { id: 'gateway', label: 'API Gateway', x: 0.32, y: 0.5, status: 'healthy' },
-  { id: 'auth', label: 'Auth Service', x: 0.56, y: 0.3, status: 'healthy' },
-  { id: 'payments', label: 'Payments', x: 0.56, y: 0.7, status: 'healthy' },
-  { id: 'db', label: 'SQLite DB', x: 0.84, y: 0.5, status: 'healthy' }
+  { id: 'clients', label: 'Clients', x: 0.10, y: 0.5, status: 'healthy' },
+  { id: 'gateway', label: 'API Gateway', x: 0.28, y: 0.5, status: 'healthy' },
+  { id: 'auth', label: 'Auth Service (5002)', x: 0.50, y: 0.24, status: 'healthy' },
+  { id: 'order', label: 'Order Service (5003)', x: 0.50, y: 0.50, status: 'healthy' },
+  { id: 'payments', label: 'Payments (5001)', x: 0.50, y: 0.76, status: 'healthy' },
+  { id: 'db', label: 'Database (ops_desk)', x: 0.82, y: 0.5, status: 'healthy' }
 ];
 let serviceEdges = [
   { from: 'clients', to: 'gateway' },
   { from: 'gateway', to: 'auth' },
+  { from: 'gateway', to: 'order' },
   { from: 'gateway', to: 'payments' },
+  { from: 'order', to: 'payments' },
   { from: 'auth', to: 'db' },
   { from: 'payments', to: 'db' }
 ];
@@ -1494,7 +1533,7 @@ function generateInitialPIR() {
     title: 'Database Connection Pool Exhaustion',
     mttd: '3.2s',
     mttr: '18.4s',
-    costSaved: '~$34,000',
+    slaProtection: '99.99%',
     actor: 'Lithium Engine'
   });
 }
@@ -1507,7 +1546,7 @@ function savePIR(inc, actor, duration) {
     riskRate: inc.riskRate || 94,
     mttd: '3.2s',
     mttr: `${duration}s`,
-    costSaved: '~$34,000',
+    slaProtection: '99.99%',
     actor
   });
 }
@@ -1525,7 +1564,7 @@ async function renderReports() {
       riskRate: 94,
       mttd: '3.2s',
       mttr: r.resolved_time || '18.4s',
-      costSaved: '~$34,000',
+      slaProtection: '99.99%',
       actor: 'Lithium Engine',
       markdown: r.content_md
     }));
@@ -1543,10 +1582,9 @@ async function renderReports() {
           View Report
         </button>
       </div>
-      <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800 text-center font-mono text-xs">
+      <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-800 text-center font-mono text-xs">
         <div><span class="text-[10px] text-slate-400 block">MTTD</span><strong class="text-sky-400">${r.mttd}</strong></div>
         <div><span class="text-[10px] text-slate-400 block">MTTR</span><strong class="text-emerald-400">${r.mttr}</strong></div>
-        <div><span class="text-[10px] text-slate-400 block">Cost Saved</span><strong class="text-white">${r.costSaved}</strong></div>
       </div>
     </div>
   `).join('');

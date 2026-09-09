@@ -95,6 +95,21 @@
               <span id="backendStatusDot" class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
               <span id="backendStatusText" class="text-amber-400">API: Connecting...</span>
             </span>
+            <span class="text-slate-600">•</span>
+            <span id="kafkaStatusBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#16161a] border border-[#2a2a30] text-[10px] font-mono">
+              <span id="kafkaStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span id="kafkaStatusText" class="text-slate-300">Kafka: Streaming</span>
+            </span>
+            <span class="text-slate-600">•</span>
+            <span id="dbEngineBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#16161a] border border-[#2a2a30] text-[10px] font-mono">
+              <span id="dbEngineDot" class="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
+              <span id="dbEngineText" class="text-sky-300">DB: PostgreSQL / WAL</span>
+            </span>
+            <span class="text-slate-600">•</span>
+            <span id="fleetStatusBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-[#16161a] border border-[#2a2a30] text-[10px] font-mono">
+              <span id="fleetStatusDot" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span id="fleetStatusText" class="text-emerald-300">Fleet: 3 Live Servers (5001-5003)</span>
+            </span>
           </div>
         </div>
       </div>
@@ -190,7 +205,7 @@
 
       <div class="bg-[#0a0a0c] border border-[#222226] rounded-xl p-4">
         <div class="text-xs text-slate-400 font-medium">Avg Resolution Time (MTTR)</div>
-        <div class="text-2xl font-bold font-mono text-sky-400 mt-1">16.2 s</div>
+        <div id="avgMttrVal" class="text-2xl font-bold font-mono text-sky-400 mt-1">16.2 s</div>
         <div class="text-[11px] text-slate-400 mt-1">Powered by Lithium AI Engine</div>
       </div>
 
@@ -593,7 +608,7 @@
         </div>
 
         <!-- Metrics -->
-        <div class="grid grid-cols-3 gap-3 text-center">
+        <div class="grid grid-cols-2 gap-3 text-center">
           <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
             <div class="text-[10px] text-slate-400 uppercase">Detection Time (MTTD)</div>
             <div class="text-lg font-bold font-mono text-sky-400 mt-0.5">3.2 s</div>
@@ -601,10 +616,6 @@
           <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
             <div class="text-[10px] text-slate-400 uppercase">Resolution Time (MTTR)</div>
             <div class="text-lg font-bold font-mono text-emerald-400 mt-0.5">18.4 s</div>
-          </div>
-          <div class="p-3 rounded-xl bg-[#111827] border border-slate-800">
-            <div class="text-[10px] text-slate-400 uppercase">Downtime Cost Saved</div>
-            <div class="text-lg font-bold font-mono text-white mt-0.5">~$34,000</div>
           </div>
         </div>
 

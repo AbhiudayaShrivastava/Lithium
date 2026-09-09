@@ -28,7 +28,7 @@ def main():
         print("Press Ctrl+C to stop the server.")
         try:
             webbrowser.open(url)
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             pass
         try:
             httpd.serve_forever()
